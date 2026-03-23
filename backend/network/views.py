@@ -1,4 +1,5 @@
 from rest_framework import viewsets
+
 from .models import Building, Room, DeviceType, Device, Port, Cable, Link
 from .serializers import (
     BuildingSerializer,
@@ -11,17 +12,17 @@ from .serializers import (
 )
 
 
-class BuildingViewSet(viewsets.ModelViewSet):
+class BuildingViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Building.objects.all().order_by("id")
     serializer_class = BuildingSerializer
 
 
-class RoomViewSet(viewsets.ModelViewSet):
+class RoomViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Room.objects.select_related("building").all().order_by("id")
     serializer_class = RoomSerializer
 
 
-class DeviceTypeViewSet(viewsets.ModelViewSet):
+class DeviceTypeViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = DeviceType.objects.all().order_by("id")
     serializer_class = DeviceTypeSerializer
 
@@ -41,7 +42,7 @@ class PortViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PortSerializer
 
 
-class CableViewSet(viewsets.ModelViewSet):
+class CableViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Cable.objects.all().order_by("id")
     serializer_class = CableSerializer
 

@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q, F
 
 
@@ -118,9 +118,38 @@ class Device(models.Model):
             if not separated:
                 raise ValidationError(f"Устройство пересекается с '{other.name}'.")
 
+    def ensure_ports(self):
+        existing_indexes = set(self.ports.values_list("index", flat=True))
+        new_ports = []
+
+        for index in range(1, self.device_type.ports_count + 1):
+            if index in existing_indexes:
+                continue
+            new_ports.append(
+                Port(
+                    device=self,
+                    index=index,
+                    name=f"eth{index}",
+                    is_active=True,
+                )
+            )
+
+        if new_ports:
+            Port.objects.bulk_create(new_ports)
+
+    def delete_related_links(self):
+        Link.objects.filter(Q(port_a__device=self) | Q(port_b__device=self)).delete()
+
     def save(self, *args, **kwargs):
-        self.full_clean()
-        super().save(*args, **kwargs)
+        with transaction.atomic():
+            self.full_clean()
+            super().save(*args, **kwargs)
+            self.ensure_ports()
+
+    def delete(self, *args, **kwargs):
+        with transaction.atomic():
+            self.delete_related_links()
+            return super().delete(*args, **kwargs)
 
 
 class Port(models.Model):
@@ -156,8 +185,8 @@ class Cable(models.Model):
 
 
 class Link(models.Model):
-    port_a = models.OneToOneField(Port, on_delete=models.PROTECT, related_name="link_as_a")
-    port_b = models.OneToOneField(Port, on_delete=models.PROTECT, related_name="link_as_b")
+    port_a = models.OneToOneField(Port, on_delete=models.CASCADE, related_name="link_as_a")
+    port_b = models.OneToOneField(Port, on_delete=models.CASCADE, related_name="link_as_b")
     cable = models.ForeignKey(Cable, on_delete=models.SET_NULL, null=True, blank=True, related_name="links")
     created_at = models.DateTimeField(auto_now_add=True)
 

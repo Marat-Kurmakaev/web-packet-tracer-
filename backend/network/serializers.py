@@ -1,4 +1,7 @@
+from django.db.models import Q
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
+
 from .models import Building, Room, DeviceType, Device, Port, Cable, Link, DeviceKind
 
 
@@ -62,31 +65,20 @@ class DeviceSerializer(serializers.ModelSerializer):
         return obj.price_override if obj.price_override is not None else obj.device_type.base_price
 
 
-#Тут исправил проёб, у меня устройства без портов создавались
+    def create(self, validated_data):
+        try:
+            return Device.objects.create(**validated_data)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict if hasattr(exc, "message_dict") else exc.messages)
 
-    def get_ports(self, obj):
-        return [
-            {
-                "id": port.id,
-                "name": port.name,
-                "index": port.index,
-                "is_active": port.is_active,
-            }
-            for port in obj.ports.all().order_by("index")
-        ]
-
-def create(self, validated_data):
-    device = Device.objects.create(**validated_data)
-
-    for i in range(1, device.device_type.ports_count + 1):
-        Port.objects.create(
-            device=device,
-            index=i,
-            name=f"eth{i}",
-            is_active=True,
-        )
-
-    return device
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        try:
+            instance.save()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict if hasattr(exc, "message_dict") else exc.messages)
+        return instance
 
 
 class CableSerializer(serializers.ModelSerializer):
@@ -135,10 +127,10 @@ class LinkSerializer(serializers.ModelSerializer):
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
 
-        if qs.filter(port_a=port_a).exists() or qs.filter(port_b=port_a).exists():
+        if qs.filter(Q(port_a=port_a) | Q(port_b=port_a)).exists():
             raise serializers.ValidationError({"port_a": "Этот порт уже занят."})
 
-        if qs.filter(port_a=port_b).exists() or qs.filter(port_b=port_b).exists():
+        if qs.filter(Q(port_a=port_b) | Q(port_b=port_b)).exists():
             raise serializers.ValidationError({"port_b": "Этот порт уже занят."})
 
         return attrs
