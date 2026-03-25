@@ -206,5 +206,6 @@ class Link(models.Model):
             raise ValidationError("Соединение PC ↔ PC запрещено.")
 
     def save(self, *args, **kwargs):
-        self.full_clean()
-        super().save(*args, **kwargs)
+        with transaction.atomic():
+            self.full_clean()
+            super().save(*args, **kwargs)

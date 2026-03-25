@@ -46,6 +46,11 @@ class BaseAPITestCase(APITestCase):
             length_m=5,
             price=250,
         )
+        self.backup_cable = Cable.objects.create(
+            name="Fiber",
+            length_m=10,
+            price=500,
+        )
 
     def create_device(self, *, name, device_type, x, y, room=None):
         return Device.objects.create(
@@ -131,6 +136,7 @@ class DeviceApiTests(BaseAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("non_field_errors", response.data)
         self.assertEqual(Device.objects.count(), 0)
 
     def test_devices_cannot_overlap(self):
@@ -149,7 +155,23 @@ class DeviceApiTests(BaseAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("non_field_errors", response.data)
         self.assertEqual(Device.objects.count(), 1)
+
+    def test_invalid_device_update_returns_400_not_server_error(self):
+        device = self.create_device(name="PC-1", device_type=self.pc_type, x=10, y=10)
+
+        response = self.client.patch(
+            reverse("device-detail", args=[device.id]),
+            {"x": 95, "y": 95},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("non_field_errors", response.data)
+        device.refresh_from_db()
+        self.assertEqual(device.x, 10)
+        self.assertEqual(device.y, 10)
 
     def test_deleting_device_removes_related_links(self):
         pc = self.create_device(name="PC-1", device_type=self.pc_type, x=10, y=10)
@@ -204,6 +226,7 @@ class LinkApiTests(BaseAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("non_field_errors", response.data)
         self.assertEqual(Link.objects.count(), 0)
 
     def test_cannot_link_ports_of_same_device(self):
@@ -218,6 +241,7 @@ class LinkApiTests(BaseAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("non_field_errors", response.data)
         self.assertEqual(Link.objects.count(), 0)
 
     def test_cannot_link_pc_to_pc(self):
@@ -232,6 +256,7 @@ class LinkApiTests(BaseAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("non_field_errors", response.data)
         self.assertEqual(Link.objects.count(), 0)
 
     def test_cannot_reuse_busy_port(self):
@@ -255,3 +280,20 @@ class LinkApiTests(BaseAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("port_a", response.data)
         self.assertEqual(Link.objects.count(), 1)
+
+    def test_patch_link_allows_changing_only_cable(self):
+        link = Link.objects.create(
+            port_a=self.pc.ports.get(index=1),
+            port_b=self.switch.ports.get(index=1),
+            cable=self.cable,
+        )
+
+        response = self.client.patch(
+            reverse("link-detail", args=[link.id]),
+            {"cable": self.backup_cable.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        link.refresh_from_db()
+        self.assertEqual(link.cable_id, self.backup_cable.id)

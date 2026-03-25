@@ -1,8 +1,26 @@
-from django.db.models import Q
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError
+from django.db.models import Q
 from rest_framework import serializers
 
 from .models import Building, Room, DeviceType, Device, Port, Cable, Link, DeviceKind
+
+
+def _normalize_validation_error(exc):
+    if hasattr(exc, "message_dict"):
+        return {
+            ("non_field_errors" if field == "__all__" else field): messages
+            for field, messages in exc.message_dict.items()
+        }
+
+    if hasattr(exc, "messages"):
+        return {"non_field_errors": list(exc.messages)}
+
+    return {"non_field_errors": [str(exc)]}
+
+
+def _raise_as_drf_validation_error(exc):
+    raise serializers.ValidationError(_normalize_validation_error(exc))
 
 
 class BuildingSerializer(serializers.ModelSerializer):
@@ -64,20 +82,29 @@ class DeviceSerializer(serializers.ModelSerializer):
     def get_effective_price(self, obj):
         return obj.price_override if obj.price_override is not None else obj.device_type.base_price
 
-
     def create(self, validated_data):
         try:
             return Device.objects.create(**validated_data)
         except DjangoValidationError as exc:
-            raise serializers.ValidationError(exc.message_dict if hasattr(exc, "message_dict") else exc.messages)
+            _raise_as_drf_validation_error(exc)
+        except IntegrityError:
+            raise serializers.ValidationError(
+                {"non_field_errors": ["Не удалось сохранить устройство из-за конфликта данных."]}
+            )
 
     def update(self, instance, validated_data):
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+
         try:
             instance.save()
         except DjangoValidationError as exc:
-            raise serializers.ValidationError(exc.message_dict if hasattr(exc, "message_dict") else exc.messages)
+            _raise_as_drf_validation_error(exc)
+        except IntegrityError:
+            raise serializers.ValidationError(
+                {"non_field_errors": ["Не удалось обновить устройство из-за конфликта данных."]}
+            )
+
         return instance
 
 
@@ -109,28 +136,56 @@ class LinkSerializer(serializers.ModelSerializer):
         read_only_fields = ["created_at"]
 
     def validate(self, attrs):
-        port_a = attrs.get("port_a")
-        port_b = attrs.get("port_b")
+        port_a = attrs.get("port_a", getattr(self.instance, "port_a", None))
+        port_b = attrs.get("port_b", getattr(self.instance, "port_b", None))
+
+        if port_a is None or port_b is None:
+            return attrs
 
         if port_a == port_b:
-            raise serializers.ValidationError("Нельзя соединять порт сам с собой.")
+            raise serializers.ValidationError({"non_field_errors": ["Нельзя соединять порт сам с собой."]})
 
         if port_a.device_id == port_b.device_id:
-            raise serializers.ValidationError("Нельзя соединять устройство само с собой.")
+            raise serializers.ValidationError({"non_field_errors": ["Нельзя соединять устройство само с собой."]})
 
         kind_a = port_a.device.device_type.kind
         kind_b = port_b.device.device_type.kind
         if kind_a == DeviceKind.PC and kind_b == DeviceKind.PC:
-            raise serializers.ValidationError("Соединение PC ↔ PC запрещено.")
+            raise serializers.ValidationError({"non_field_errors": ["Соединение PC ↔ PC запрещено."]})
 
         qs = Link.objects.all()
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
 
         if qs.filter(Q(port_a=port_a) | Q(port_b=port_a)).exists():
-            raise serializers.ValidationError({"port_a": "Этот порт уже занят."})
+            raise serializers.ValidationError({"port_a": ["Этот порт уже занят."]})
 
         if qs.filter(Q(port_a=port_b) | Q(port_b=port_b)).exists():
-            raise serializers.ValidationError({"port_b": "Этот порт уже занят."})
+            raise serializers.ValidationError({"port_b": ["Этот порт уже занят."]})
 
         return attrs
+
+    def create(self, validated_data):
+        try:
+            return Link.objects.create(**validated_data)
+        except DjangoValidationError as exc:
+            _raise_as_drf_validation_error(exc)
+        except IntegrityError:
+            raise serializers.ValidationError(
+                {"non_field_errors": ["Не удалось создать соединение из-за конфликта данных."]}
+            )
+
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        try:
+            instance.save()
+        except DjangoValidationError as exc:
+            _raise_as_drf_validation_error(exc)
+        except IntegrityError:
+            raise serializers.ValidationError(
+                {"non_field_errors": ["Не удалось обновить соединение из-за конфликта данных."]}
+            )
+
+        return instance
