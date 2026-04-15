@@ -12,17 +12,17 @@ from .serializers import (
 )
 
 
-class BuildingViewSet(viewsets.ReadOnlyModelViewSet):
+class BuildingViewSet(viewsets.ModelViewSet):
     queryset = Building.objects.all().order_by("id")
     serializer_class = BuildingSerializer
 
 
-class RoomViewSet(viewsets.ReadOnlyModelViewSet):
+class RoomViewSet(viewsets.ModelViewSet):
     queryset = Room.objects.select_related("building").all().order_by("id")
     serializer_class = RoomSerializer
 
 
-class DeviceTypeViewSet(viewsets.ReadOnlyModelViewSet):
+class DeviceTypeViewSet(viewsets.ModelViewSet):
     queryset = DeviceType.objects.all().order_by("id")
     serializer_class = DeviceTypeSerializer
 
@@ -42,7 +42,7 @@ class PortViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PortSerializer
 
 
-class CableViewSet(viewsets.ReadOnlyModelViewSet):
+class CableViewSet(viewsets.ModelViewSet):
     queryset = Cable.objects.all().order_by("id")
     serializer_class = CableSerializer
 

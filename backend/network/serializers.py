@@ -30,7 +30,7 @@ class BuildingSerializer(serializers.ModelSerializer):
 
 
 class RoomSerializer(serializers.ModelSerializer):
-    building_name = serializers.CharField(source="building.name", read_only=True)
+    building_name = serializers.CharField(source="building.name")
 
     class Meta:
         model = Room
@@ -44,7 +44,7 @@ class DeviceTypeSerializer(serializers.ModelSerializer):
 
 
 class PortSerializer(serializers.ModelSerializer):
-    device_name = serializers.CharField(source="device.name", read_only=True)
+    device_name = serializers.CharField(source="device.name")
 
     class Meta:
         model = Port
@@ -52,12 +52,12 @@ class PortSerializer(serializers.ModelSerializer):
 
 
 class DeviceSerializer(serializers.ModelSerializer):
-    room_name = serializers.CharField(source="room.name", read_only=True)
-    device_type_name = serializers.CharField(source="device_type.name", read_only=True)
-    kind = serializers.CharField(source="device_type.kind", read_only=True)
-    width = serializers.IntegerField(read_only=True)
-    height = serializers.IntegerField(read_only=True)
-    ports = PortSerializer(many=True, read_only=True)
+    room_name = serializers.CharField(source="room.name")
+    device_type_name = serializers.CharField(source="device_type.name")
+    kind = serializers.CharField(source="device_type.kind")
+    width = serializers.IntegerField()
+    height = serializers.IntegerField()
+    ports = PortSerializer(many=True, )
     effective_price = serializers.SerializerMethodField()
 
     class Meta:
@@ -115,10 +115,10 @@ class CableSerializer(serializers.ModelSerializer):
 
 
 class LinkSerializer(serializers.ModelSerializer):
-    port_a_name = serializers.CharField(source="port_a.name", read_only=True)
-    port_b_name = serializers.CharField(source="port_b.name", read_only=True)
-    device_a_name = serializers.CharField(source="port_a.device.name", read_only=True)
-    device_b_name = serializers.CharField(source="port_b.device.name", read_only=True)
+    port_a_name = serializers.CharField(source="port_a.name")
+    port_b_name = serializers.CharField(source="port_b.name")
+    device_a_name = serializers.CharField(source="port_a.device.name")
+    device_b_name = serializers.CharField(source="port_b.device.name")
 
     class Meta:
         model = Link
