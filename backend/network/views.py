@@ -1,50 +1,59 @@
 from rest_framework import viewsets
 
-from .models import Building, Room, DeviceType, Device, Port, Cable, Link
+from .models import Computer, Switch, Router, Cable, TopologyDevice, Port, Link
 from .serializers import (
-    BuildingSerializer,
-    RoomSerializer,
-    DeviceTypeSerializer,
-    DeviceSerializer,
-    PortSerializer,
+    ComputerSerializer,
+    SwitchSerializer,
+    RouterSerializer,
     CableSerializer,
+    TopologyDeviceSerializer,
+    PortSerializer,
     LinkSerializer,
 )
 
 
-class BuildingViewSet(viewsets.ModelViewSet):
-    queryset = Building.objects.all().order_by("id")
-    serializer_class = BuildingSerializer
+class ComputerViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Computer.objects.all().order_by("id")
+    serializer_class = ComputerSerializer
 
 
-class RoomViewSet(viewsets.ModelViewSet):
-    queryset = Room.objects.select_related("building").all().order_by("id")
-    serializer_class = RoomSerializer
+class SwitchViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Switch.objects.all().order_by("id")
+    serializer_class = SwitchSerializer
 
 
-class DeviceTypeViewSet(viewsets.ModelViewSet):
-    queryset = DeviceType.objects.all().order_by("id")
-    serializer_class = DeviceTypeSerializer
+class RouterViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Router.objects.all().order_by("id")
+    serializer_class = RouterSerializer
 
 
-class DeviceViewSet(viewsets.ModelViewSet):
+class CableViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Cable.objects.all().order_by("id")
+    serializer_class = CableSerializer
+
+
+class TopologyDeviceViewSet(viewsets.ModelViewSet):
     queryset = (
-        Device.objects.select_related("room", "room__building", "device_type")
+        TopologyDevice.objects.select_related("computer", "switch", "router")
         .prefetch_related("ports")
         .all()
         .order_by("id")
     )
-    serializer_class = DeviceSerializer
+    serializer_class = TopologyDeviceSerializer
 
 
 class PortViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Port.objects.select_related("device", "device__device_type", "device__room").all().order_by("id")
+    queryset = (
+        Port.objects.select_related(
+            "device",
+            "device__computer",
+            "device__switch",
+            "device__router",
+        )
+        .all()
+        .order_by("id")
+    )
     serializer_class = PortSerializer
-
-
-class CableViewSet(viewsets.ModelViewSet):
-    queryset = Cable.objects.all().order_by("id")
-    serializer_class = CableSerializer
 
 
 class LinkViewSet(viewsets.ModelViewSet):
@@ -52,10 +61,14 @@ class LinkViewSet(viewsets.ModelViewSet):
         Link.objects.select_related(
             "port_a",
             "port_a__device",
-            "port_a__device__device_type",
+            "port_a__device__computer",
+            "port_a__device__switch",
+            "port_a__device__router",
             "port_b",
             "port_b__device",
-            "port_b__device__device_type",
+            "port_b__device__computer",
+            "port_b__device__switch",
+            "port_b__device__router",
             "cable",
         )
         .all()

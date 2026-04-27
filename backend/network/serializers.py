@@ -3,7 +3,17 @@ from django.db import IntegrityError
 from django.db.models import Q
 from rest_framework import serializers
 
-from .models import Building, Room, DeviceType, Device, Port, Cable, Link, DeviceKind
+from .models import Computer, Switch, Router, Cable, TopologyDevice, Port, Link
+
+
+CATALOG_ITEM_FIELDS = [
+    "id",
+    "name",
+    "image",
+    "description",
+    "price",
+    "max_connected_devices",
+]
 
 
 def _normalize_validation_error(exc):
@@ -23,102 +33,133 @@ def _raise_as_drf_validation_error(exc):
     raise serializers.ValidationError(_normalize_validation_error(exc))
 
 
-class BuildingSerializer(serializers.ModelSerializer):
+class SafeModelSerializer(serializers.ModelSerializer):
+    def create(self, validated_data):
+        try:
+            return super().create(validated_data)
+        except DjangoValidationError as exc:
+            _raise_as_drf_validation_error(exc)
+        except IntegrityError:
+            raise serializers.ValidationError(
+                {"non_field_errors": ["Не удалось сохранить объект из-за конфликта данных."]}
+            )
+
+    def update(self, instance, validated_data):
+        try:
+            return super().update(instance, validated_data)
+        except DjangoValidationError as exc:
+            _raise_as_drf_validation_error(exc)
+        except IntegrityError:
+            raise serializers.ValidationError(
+                {"non_field_errors": ["Не удалось обновить объект из-за конфликта данных."]}
+            )
+
+
+class ComputerSerializer(SafeModelSerializer):
     class Meta:
-        model = Building
-        fields = ["id", "name"]
+        model = Computer
+        fields = CATALOG_ITEM_FIELDS
 
 
-class RoomSerializer(serializers.ModelSerializer):
-    building_name = serializers.CharField(source="building.name")
-
+class SwitchSerializer(SafeModelSerializer):
     class Meta:
-        model = Room
-        fields = ["id", "name", "building", "building_name", "x", "y", "width", "height"]
+        model = Switch
+        fields = CATALOG_ITEM_FIELDS
 
 
-class DeviceTypeSerializer(serializers.ModelSerializer):
+class RouterSerializer(SafeModelSerializer):
     class Meta:
-        model = DeviceType
-        fields = ["id", "name", "kind", "ports_count", "base_price", "width", "height"]
+        model = Router
+        fields = CATALOG_ITEM_FIELDS
+
+
+class CableSerializer(SafeModelSerializer):
+    class Meta:
+        model = Cable
+        fields = ["id", "name", "image", "description", "price"]
 
 
 class PortSerializer(serializers.ModelSerializer):
-    device_name = serializers.CharField(source="device.name")
+    device_name = serializers.CharField(source="device.name", read_only=True)
 
     class Meta:
         model = Port
         fields = ["id", "device", "device_name", "name", "index", "is_active"]
+        read_only_fields = ["name", "index", "is_active"]
 
 
-class DeviceSerializer(serializers.ModelSerializer):
-    room_name = serializers.CharField(source="room.name")
-    device_type_name = serializers.CharField(source="device_type.name")
-    kind = serializers.CharField(source="device_type.kind")
-    width = serializers.IntegerField()
-    height = serializers.IntegerField()
-    ports = PortSerializer(many=True, )
-    effective_price = serializers.SerializerMethodField()
+class TopologyDeviceSerializer(SafeModelSerializer):
+    computer = serializers.PrimaryKeyRelatedField(
+        queryset=Computer.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    switch = serializers.PrimaryKeyRelatedField(
+        queryset=Switch.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    router = serializers.PrimaryKeyRelatedField(
+        queryset=Router.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    catalog_type = serializers.SerializerMethodField()
+    catalog_item = serializers.SerializerMethodField()
+    ports = PortSerializer(many=True, read_only=True)
 
     class Meta:
-        model = Device
+        model = TopologyDevice
         fields = [
             "id",
             "name",
-            "room",
-            "room_name",
-            "device_type",
-            "device_type_name",
-            "kind",
-            "x",
-            "y",
-            "width",
-            "height",
-            "price_override",
-            "effective_price",
+            "computer",
+            "switch",
+            "router",
+            "catalog_type",
+            "catalog_item",
             "ports",
         ]
 
-    def get_effective_price(self, obj):
-        return obj.price_override if obj.price_override is not None else obj.device_type.base_price
+    def validate(self, attrs):
+        computer = attrs.get("computer", getattr(self.instance, "computer", None))
+        switch = attrs.get("switch", getattr(self.instance, "switch", None))
+        router = attrs.get("router", getattr(self.instance, "router", None))
 
-    def create(self, validated_data):
-        try:
-            return Device.objects.create(**validated_data)
-        except DjangoValidationError as exc:
-            _raise_as_drf_validation_error(exc)
-        except IntegrityError:
+        selected_count = sum(value is not None for value in [computer, switch, router])
+        if selected_count != 1:
             raise serializers.ValidationError(
-                {"non_field_errors": ["Не удалось сохранить устройство из-за конфликта данных."]}
+                {"non_field_errors": ["Нужно выбрать ровно одну модель устройства: computer, switch или router."]}
             )
 
-    def update(self, instance, validated_data):
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
+        return attrs
 
-        try:
-            instance.save()
-        except DjangoValidationError as exc:
-            _raise_as_drf_validation_error(exc)
-        except IntegrityError:
-            raise serializers.ValidationError(
-                {"non_field_errors": ["Не удалось обновить устройство из-за конфликта данных."]}
-            )
+    def get_catalog_type(self, obj):
+        if obj.computer_id:
+            return "computer"
+        if obj.switch_id:
+            return "switch"
+        if obj.router_id:
+            return "router"
+        return None
 
-        return instance
+    def get_catalog_item(self, obj):
+        if obj.computer_id:
+            return ComputerSerializer(obj.computer, context=self.context).data
+        if obj.switch_id:
+            return SwitchSerializer(obj.switch, context=self.context).data
+        if obj.router_id:
+            return RouterSerializer(obj.router, context=self.context).data
+        return None
 
 
-class CableSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Cable
-        fields = ["id", "name", "length_m", "price"]
-
-
-class LinkSerializer(serializers.ModelSerializer):
-    port_a_name = serializers.CharField(source="port_a.name")
-    port_b_name = serializers.CharField(source="port_b.name")
-    device_a_name = serializers.CharField(source="port_a.device.name")
-    device_b_name = serializers.CharField(source="port_b.device.name")
+class LinkSerializer(SafeModelSerializer):
+    port_a_name = serializers.CharField(source="port_a.name", read_only=True)
+    port_b_name = serializers.CharField(source="port_b.name", read_only=True)
+    device_a_name = serializers.CharField(source="port_a.device.name", read_only=True)
+    device_b_name = serializers.CharField(source="port_b.device.name", read_only=True)
+    cable_name = serializers.CharField(source="cable.name", read_only=True)
+    cable_data = CableSerializer(source="cable", read_only=True)
 
     class Meta:
         model = Link
@@ -131,6 +172,8 @@ class LinkSerializer(serializers.ModelSerializer):
             "port_b_name",
             "device_b_name",
             "cable",
+            "cable_name",
+            "cable_data",
             "created_at",
         ]
         read_only_fields = ["created_at"]
@@ -148,11 +191,6 @@ class LinkSerializer(serializers.ModelSerializer):
         if port_a.device_id == port_b.device_id:
             raise serializers.ValidationError({"non_field_errors": ["Нельзя соединять устройство само с собой."]})
 
-        kind_a = port_a.device.device_type.kind
-        kind_b = port_b.device.device_type.kind
-        if kind_a == DeviceKind.PC and kind_b == DeviceKind.PC:
-            raise serializers.ValidationError({"non_field_errors": ["Соединение PC ↔ PC запрещено."]})
-
         qs = Link.objects.all()
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
@@ -164,28 +202,3 @@ class LinkSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"port_b": ["Этот порт уже занят."]})
 
         return attrs
-
-    def create(self, validated_data):
-        try:
-            return Link.objects.create(**validated_data)
-        except DjangoValidationError as exc:
-            _raise_as_drf_validation_error(exc)
-        except IntegrityError:
-            raise serializers.ValidationError(
-                {"non_field_errors": ["Не удалось создать соединение из-за конфликта данных."]}
-            )
-
-    def update(self, instance, validated_data):
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-
-        try:
-            instance.save()
-        except DjangoValidationError as exc:
-            _raise_as_drf_validation_error(exc)
-        except IntegrityError:
-            raise serializers.ValidationError(
-                {"non_field_errors": ["Не удалось обновить соединение из-за конфликта данных."]}
-            )
-
-        return instance
