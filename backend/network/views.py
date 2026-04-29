@@ -12,22 +12,22 @@ from .serializers import (
 )
 
 
-class ComputerViewSet(viewsets.ReadOnlyModelViewSet):
+class ComputerViewSet(viewsets.ModelViewSet):
     queryset = Computer.objects.all().order_by("id")
     serializer_class = ComputerSerializer
 
 
-class SwitchViewSet(viewsets.ReadOnlyModelViewSet):
+class SwitchViewSet(viewsets.ModelViewSet):
     queryset = Switch.objects.all().order_by("id")
     serializer_class = SwitchSerializer
 
 
-class RouterViewSet(viewsets.ReadOnlyModelViewSet):
+class RouterViewSet(viewsets.ModelViewSet):
     queryset = Router.objects.all().order_by("id")
     serializer_class = RouterSerializer
 
 
-class CableViewSet(viewsets.ReadOnlyModelViewSet):
+class CableViewSet(viewsets.ModelViewSet):
     queryset = Cable.objects.all().order_by("id")
     serializer_class = CableSerializer
 
