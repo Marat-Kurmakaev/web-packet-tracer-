@@ -204,7 +204,34 @@ export const Canvas = ({
           onMouseDown={(e) => handleMouseDownDevice(e, d)}
           onClick={() => handleDeviceClick(d)}
         >
-          {d.type}
+          <>
+  {d.model ? (
+    <div>
+      <img
+        src={d.model.image}
+        alt={d.model.name}
+        style={{
+          width: 80,
+          height: 50,
+          objectFit: "contain",
+          display: "block",
+          marginBottom: 4,
+        }}
+      />
+
+      <div
+        style={{
+          fontSize: 12,
+          textAlign: "center",
+        }}
+      >
+        {d.model.name}
+      </div>
+    </div>
+  ) : (
+    d.type
+  )}
+</>
         </div>
       ))}
     </div>

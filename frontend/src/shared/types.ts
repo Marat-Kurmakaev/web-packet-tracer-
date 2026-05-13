@@ -1,26 +1,36 @@
 export type DeviceType = "ПК" | "Маршрутизатор" | "Коммутатор";
 
+export interface RouterModel {
+  id: number;
+  name: string;
+  image: string;
+  price: number;
+}
+
 export interface Device {
   id: number;
   type: DeviceType;
   x: number;
   y: number;
-  цена: number; // рубли
+  цена: number;
+
+  // для роутеров
+  model?: RouterModel;
 }
 
 export interface Link {
   id: number;
   fromId: number;
   toId: number;
-  цена: number; // рубли
+  цена: number;
 }
 
 export interface Room {
   id: number;
-  width: number;   // в пикселях
-  height: number;  // в пикселях
   x: number;
   y: number;
+  width: number;
+  height: number;
 }
 
 export interface Wall {
