@@ -171,15 +171,17 @@ export const Canvas = ({
           const to = devices.find((d) => d.id === l.toId);
           if (!from || !to) return null;
           return (
-            <line
-              key={l.id}
-              x1={from.x + 50}
-              y1={from.y + 20}
-              x2={to.x + 50}
-              y2={to.y + 20}
-              stroke="black"
-              strokeWidth={2}
-            />
+  <polyline
+    key={l.id}
+    points={`
+      ${from.x + 50},${from.y + 20}
+      ${to.x + 50},${from.y + 20}
+      ${to.x + 50},${to.y + 20}
+    `}
+    fill="none"
+    stroke="black"
+    strokeWidth={2}
+  />
           );
         })}
         {linkDrag && (
