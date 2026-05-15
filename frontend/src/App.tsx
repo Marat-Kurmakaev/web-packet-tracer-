@@ -98,6 +98,7 @@ const selectSwitch = (sw: RouterModel) => {
     <div className="app" style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <header style={{ padding: 10, borderBottom: "1px solid black" }}>
         Конструктор сети — 💰 {total} ₽
+        <a style={{marginLeft:10}} href="/programm.html">О программе</a>
       </header>
       <div style={{ display: "flex", flex: 1 }}>
         <Sidebar onAddDevice={addDevice} onAddRoom={addRoom} onStartWallDraw={startWallDraw} />
